@@ -16,7 +16,7 @@ import (
 	"codeberg.org/matheus/porter/internal/store"
 )
 
-const linkedInVersion = "202501"
+const defaultLinkedInVersion = "202611"
 
 type Client struct {
 	repo     *store.Repository
@@ -55,9 +55,11 @@ func (c *Client) PublishPost(ctx context.Context, postID, text, pngPath string) 
 		return "", errors.New("linkedin token expired (run /auth to reconnect)")
 	}
 
+	apiVersion := c.apiVersion(ctx)
+
 	var imageURN string
 	if pngPath != "" {
-		imageURN, err = c.uploadImage(ctx, tok.AccessToken, tok.PersonURN, pngPath)
+		imageURN, err = c.uploadImage(ctx, tok.AccessToken, tok.PersonURN, pngPath, apiVersion)
 		if err != nil {
 			return "", fmt.Errorf("upload image: %w", err)
 		}
@@ -92,7 +94,7 @@ func (c *Client) PublishPost(ctx context.Context, postID, text, pngPath string) 
 	if err != nil {
 		return "", err
 	}
-	c.setRestHeaders(req, tok.AccessToken)
+	c.setRestHeaders(req, tok.AccessToken, apiVersion)
 	req.Header.Set("Content-Type", "application/json")
 
 	resp, err := c.http.Do(req)
@@ -120,7 +122,7 @@ type initUploadResponse struct {
 	} `json:"value"`
 }
 
-func (c *Client) uploadImage(ctx context.Context, token, personURN, pngPath string) (string, error) {
+func (c *Client) uploadImage(ctx context.Context, token, personURN, pngPath, apiVersion string) (string, error) {
 	initBody, _ := json.Marshal(map[string]any{
 		"initializeUploadRequest": map[string]any{
 			"owner": personURN,
@@ -130,7 +132,7 @@ func (c *Client) uploadImage(ctx context.Context, token, personURN, pngPath stri
 	if err != nil {
 		return "", err
 	}
-	c.setRestHeaders(req, token)
+	c.setRestHeaders(req, token, apiVersion)
 	req.Header.Set("Content-Type", "application/json")
 
 	resp, err := c.http.Do(req)
@@ -176,8 +178,16 @@ func (c *Client) uploadImage(ctx context.Context, token, personURN, pngPath stri
 	return initResp.Value.Image, nil
 }
 
-func (c *Client) setRestHeaders(req *http.Request, token string) {
+func (c *Client) apiVersion(ctx context.Context) string {
+	v, err := c.settings.GetString(ctx, settings.KeyLinkedInAPIVersion)
+	if err != nil || strings.TrimSpace(v) == "" {
+		return defaultLinkedInVersion
+	}
+	return strings.TrimSpace(v)
+}
+
+func (c *Client) setRestHeaders(req *http.Request, token, apiVersion string) {
 	req.Header.Set("Authorization", "Bearer "+token)
-	req.Header.Set("LinkedIn-Version", linkedInVersion)
+	req.Header.Set("LinkedIn-Version", apiVersion)
 	req.Header.Set("X-Restli-Protocol-Version", "2.0.0")
 }

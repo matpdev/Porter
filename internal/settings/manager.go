@@ -22,6 +22,7 @@ const (
 	KeyLinkedInClientID          = "linkedin.client_id"
 	KeyLinkedInClientSecret      = "linkedin.client_secret"
 	KeyLinkedInRedirectURI       = "linkedin.redirect_uri"
+	KeyLinkedInAPIVersion        = "linkedin.api_version"
 	KeyCronSchedule              = "pipeline.cron_schedule"
 	KeyReviewReminderSchedule    = "pipeline.review_reminder_schedule"
 	KeyAutoTrustAfterApprovals   = "pipeline.auto_trust_after_approvals"
@@ -62,6 +63,7 @@ var defaults = []definition{
 	{Key: KeyLinkedInClientID, DefaultValue: "", IsSecret: false},
 	{Key: KeyLinkedInClientSecret, DefaultValue: "", IsSecret: true},
 	{Key: KeyLinkedInRedirectURI, DefaultValue: "http://127.0.0.1:8787/oauth/linkedin/callback", IsSecret: false},
+	{Key: KeyLinkedInAPIVersion, DefaultValue: "202611", IsSecret: false},
 	{Key: KeyCronSchedule, DefaultValue: "0 8 * * 2,4", IsSecret: false},
 	{Key: KeyReviewReminderSchedule, DefaultValue: "0 10,18 * * *", IsSecret: false},
 	{Key: KeyAutoTrustAfterApprovals, DefaultValue: "2", IsSecret: false},
