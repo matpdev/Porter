@@ -8,6 +8,7 @@ Type=simple
 User=porter
 Group=porter
 Environment=HOME=/var/lib/porter
+Environment=PATH=/usr/local/bin:/usr/bin:/bin
 Environment=PORTER_CHROMIUM_PATH=/usr/bin/chromium
 WorkingDirectory=/var/lib/porter
 ExecStart=/usr/bin/porter daemon --db /var/lib/porter/app.db --media-dir /var/lib/porter/media

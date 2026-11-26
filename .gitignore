@@ -1,6 +1,7 @@
 # Binaries & build outputs
 /porter
 /daemon
+/dist/
 *.exe
 *.test
 *.out

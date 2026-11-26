@@ -166,9 +166,19 @@ func resolveAgyBin(configured string) string {
 		return p
 	}
 	home, _ := os.UserHomeDir()
-	fallback := filepath.Join(home, ".local", "bin", "agy")
-	if _, err := os.Stat(fallback); err == nil {
-		return fallback
+	candidates := []string{
+		filepath.Join(home, ".local", "bin", "agy"),
+		"/usr/local/bin/agy",
+		"/usr/bin/agy",
+		"/opt/antigravity/agy",
+	}
+	if matches, err := filepath.Glob("/home/*/.local/bin/agy"); err == nil {
+		candidates = append(candidates, matches...)
+	}
+	for _, c := range candidates {
+		if info, err := os.Stat(c); err == nil && !info.IsDir() {
+			return c
+		}
 	}
 	return bin
 }

@@ -11,10 +11,11 @@ makedepends=('go')
 install=porter.install
 source=(
   "porter.service"
+  "porter-user.service"
   "porter.sysusers"
   "porter.tmpfiles"
 )
-sha256sums=('SKIP' 'SKIP' 'SKIP')
+sha256sums=('SKIP' 'SKIP' 'SKIP' 'SKIP')
 
 build() {
   # Build from the repository root (two levels above packaging/arch)
@@ -28,6 +29,7 @@ build() {
 package() {
   install -Dm755 "${srcdir}/porter" "${pkgdir}/usr/bin/porter"
   install -Dm644 "${srcdir}/porter.service" "${pkgdir}/usr/lib/systemd/system/porter.service"
+  install -Dm644 "${srcdir}/porter-user.service" "${pkgdir}/usr/lib/systemd/user/porter.service"
   install -Dm644 "${srcdir}/porter.sysusers" "${pkgdir}/usr/lib/sysusers.d/porter.conf"
   install -Dm644 "${srcdir}/porter.tmpfiles" "${pkgdir}/usr/lib/tmpfiles.d/porter.conf"
 }

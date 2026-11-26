@@ -66,3 +66,21 @@ Configure live settings against the service database:
 sudo -u porter porter --db /var/lib/porter/app.db config set telegram.bot_token "<TELEGRAM_BOT_TOKEN>"
 ```
 
+## macOS (`launchd` Service Installer)
+
+Compiles `porter` to `~/.local/bin/porter`, ensures Playwright Chromium is installed, and registers/restarts a `launchd` agent (`dev.sidequestlab.porter`):
+
+```bash
+make install-macos
+```
+
+## Cross-compiling for Linux (from macOS)
+
+Because `porter` uses pure-Go SQLite (`CGO_ENABLED=0`), cross-compilation requires zero C toolchains:
+
+```bash
+make build-linux-amd64   # -> dist/porter-linux-amd64
+make build-linux-arm64   # -> dist/porter-linux-arm64
+```
+
+

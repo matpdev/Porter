@@ -1,0 +1,15 @@
+[Unit]
+Description=Porter & Odradek Autonomous Tech Publisher (User Session)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+Environment=PATH=%h/.local/bin:/usr/local/bin:/usr/bin:/bin
+Environment=PORTER_CHROMIUM_PATH=/usr/bin/chromium
+ExecStart=/usr/bin/porter daemon --db %h/.local/share/porter/app.db --media-dir %h/.local/share/porter/media
+Restart=on-failure
+RestartSec=5s
+
+[Install]
+WantedBy=default.target
