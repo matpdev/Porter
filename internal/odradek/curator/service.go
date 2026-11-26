@@ -252,13 +252,32 @@ func (s *Service) CurateFromText(ctx context.Context, text string) (*CuratedTopi
 	summary := text
 	sourceURL := ""
 	if req, ok := ParseRepoIntent(text); ok {
-		token := ""
-		if req.Forge == "codeberg" {
-			token, _ = s.settings.GetString(ctx, settings.KeyCuratorCodebergToken)
-		} else {
-			token, _ = s.settings.GetString(ctx, settings.KeyCuratorGitHubToken)
+		ghToken, _ := s.settings.GetString(ctx, settings.KeyCuratorGitHubToken)
+		cbToken, _ := s.settings.GetString(ctx, settings.KeyCuratorCodebergToken)
+
+		tryInspect := func(r RepoRequest) (string, string, error) {
+			tok := strings.TrimSpace(ghToken)
+			if r.Forge == "codeberg" {
+				tok = strings.TrimSpace(cbToken)
+			}
+			return s.inspector.Inspect(ctx, r, tok)
 		}
-		if repoURL, repoSummary, err := s.inspector.Inspect(ctx, req, strings.TrimSpace(token)); err == nil && repoSummary != "" {
+
+		repoURL, repoSummary, err := tryInspect(req)
+		if err != nil && !req.ForgeSpecified {
+			// Fallback to the other forge when user didn't specify GitHub vs Codeberg.
+			alt := req
+			if req.Forge == "github" {
+				alt.Forge = "codeberg"
+			} else {
+				alt.Forge = "github"
+			}
+			if u, sum, altErr := tryInspect(alt); altErr == nil {
+				repoURL, repoSummary, err = u, sum, nil
+			}
+		}
+
+		if err == nil && repoSummary != "" {
 			sourceURL = repoURL
 			summary = fmt.Sprintf("User request: %s\n\n%s", text, repoSummary)
 			title = fmt.Sprintf("%s (%s)", req.FullName(), req.Branch)

@@ -11,10 +11,11 @@ import (
 )
 
 type RepoRequest struct {
-	Forge  string // "github" or "codeberg"
-	Owner  string
-	Repo   string
-	Branch string
+	Forge          string // "github" or "codeberg"
+	ForgeSpecified bool
+	Owner          string
+	Repo           string
+	Branch         string
 }
 
 func (r RepoRequest) FullName() string {
@@ -45,8 +46,12 @@ func ParseRepoIntent(text string) (RepoRequest, bool) {
 	}
 
 	forge := "github"
+	forgeSpecified := false
 	if strings.Contains(lower, "codeberg") {
 		forge = "codeberg"
+		forgeSpecified = true
+	} else if strings.Contains(lower, "github") {
+		forgeSpecified = true
 	}
 
 	var branch string
@@ -61,10 +66,11 @@ func ParseRepoIntent(text string) (RepoRequest, bool) {
 	}
 
 	return RepoRequest{
-		Forge:  forge,
-		Owner:  owner,
-		Repo:   repo,
-		Branch: branch,
+		Forge:          forge,
+		ForgeSpecified: forgeSpecified,
+		Owner:          owner,
+		Repo:           repo,
+		Branch:         branch,
 	}, true
 }
 
@@ -147,6 +153,9 @@ func (ri *RepoInspector) Inspect(ctx context.Context, req RepoRequest, token str
 
 	var sb strings.Builder
 	sb.WriteString(fmt.Sprintf("Repository: %s (%s)\n", req.FullName(), req.Forge))
+	if meta.HTMLURL != "" {
+		sb.WriteString(fmt.Sprintf("Canonical URL: %s\n", meta.HTMLURL))
+	}
 	sb.WriteString(fmt.Sprintf("Branch inspected: %s (default: %s, fork: %v)\n", branch, meta.DefaultBranch, meta.Fork))
 	if meta.Description != "" {
 		sb.WriteString(fmt.Sprintf("Description: %s\n", meta.Description))
@@ -155,6 +164,23 @@ func (ri *RepoInspector) Inspect(ctx context.Context, req RepoRequest, token str
 		sb.WriteString(fmt.Sprintf("Forked from: %s (base branch: %s)\n", meta.Parent.FullName, meta.Parent.DefaultBranch))
 	}
 	sb.WriteString("\n")
+
+	if tree, err := ri.fetchRootContents(ctx, baseURL, req.Forge, req.FullName(), branch, token); err == nil && len(tree) > 0 {
+		sb.WriteString("Repository root files/dirs:\n")
+		for _, entry := range tree {
+			sb.WriteString("- " + entry + "\n")
+		}
+		sb.WriteString("\n")
+	}
+
+	if readme, err := ri.fetchReadme(ctx, baseURL, req.Forge, req.FullName(), branch, token); err == nil && readme != "" {
+		if len(readme) > 6000 {
+			readme = readme[:6000]
+		}
+		sb.WriteString("README:\n")
+		sb.WriteString(readme)
+		sb.WriteString("\n\n")
+	}
 
 	// Try compare diff when inspecting a non-default branch or a fork.
 	var compareSpec string
@@ -277,4 +303,66 @@ func (ri *RepoInspector) fetchBranchCommits(ctx context.Context, baseURL, forge,
 		}
 	}
 	return out, nil
+}
+
+func (ri *RepoInspector) fetchRootContents(ctx context.Context, baseURL, forge, fullName, branch, token string) ([]string, error) {
+	u := fmt.Sprintf("%s/repos/%s/contents?ref=%s", baseURL, fullName, branch)
+	resp, err := ri.doAuthGet(ctx, u, forge, token)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("contents status %d", resp.StatusCode)
+	}
+	var entries []struct {
+		Name string `json:"name"`
+		Type string `json:"type"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&entries); err != nil {
+		return nil, err
+	}
+	var out []string
+	for i, e := range entries {
+		if i >= 30 {
+			break
+		}
+		out = append(out, fmt.Sprintf("%s (%s)", e.Name, e.Type))
+	}
+	return out, nil
+}
+
+func (ri *RepoInspector) fetchReadme(ctx context.Context, baseURL, forge, fullName, branch, token string) (string, error) {
+	var u string
+	if forge == "codeberg" {
+		u = fmt.Sprintf("%s/repos/%s/raw/README.md?ref=%s", baseURL, fullName, branch)
+	} else {
+		u = fmt.Sprintf("%s/repos/%s/readme?ref=%s", baseURL, fullName, branch)
+	}
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, u, nil)
+	if err != nil {
+		return "", err
+	}
+	req.Header.Set("User-Agent", "PorterOdradek/1.0")
+	if forge != "codeberg" {
+		req.Header.Set("Accept", "application/vnd.github.raw+json")
+	}
+	if token != "" {
+		if forge == "codeberg" {
+			req.Header.Set("Authorization", "token "+token)
+		} else {
+			req.Header.Set("Authorization", "Bearer "+token)
+		}
+	}
+	resp, err := ri.client.Do(req)
+	if err != nil {
+		return "", err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return "", fmt.Errorf("readme status %d", resp.StatusCode)
+	}
+	buf := make([]byte, 8192)
+	n, _ := resp.Body.Read(buf)
+	return strings.TrimSpace(string(buf[:n])), nil
 }

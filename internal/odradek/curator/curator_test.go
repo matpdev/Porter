@@ -215,3 +215,45 @@ func TestParseRepoIntentAndInspectBranch(t *testing.T) {
 		t.Fatalf("expected repo diff summary, got:\n%s", topic.Summary)
 	}
 }
+
+func TestCodebergFallbackAndReadmeExtraction(t *testing.T) {
+	ghSrv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusNotFound)
+	}))
+	defer ghSrv.Close()
+
+	cbSrv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/repos/l0gic_br4in/el-recrutador":
+			_ = json.NewEncoder(w).Encode(map[string]any{
+				"full_name":      "l0gic_br4in/el-recrutador",
+				"default_branch": "main",
+				"html_url":       "https://codeberg.org/l0gic_br4in/el-recrutador",
+			})
+		case "/repos/l0gic_br4in/el-recrutador/raw/README.md":
+			_, _ = fmt.Fprint(w, "# el-recrutador\n\nAutomated job search & outreach assistant.")
+		case "/repos/l0gic_br4in/el-recrutador/contents":
+			_ = json.NewEncoder(w).Encode([]map[string]string{{"name": "README.md", "type": "file"}})
+		case "/repos/l0gic_br4in/el-recrutador/commits":
+			_ = json.NewEncoder(w).Encode([]map[string]any{{"commit": map[string]string{"message": "feat: add SMTP queue"}}})
+		default:
+			w.WriteHeader(http.StatusNotFound)
+		}
+	}))
+	defer cbSrv.Close()
+
+	ctx := context.Background()
+	repo, mgr := setupCuratorDB(t)
+	svc := curator.NewService(repo, mgr, nil, nil, nil, nil).WithRepoInspector(
+		curator.NewRepoInspector(cbSrv.Client()).WithBaseURLs(ghSrv.URL, cbSrv.URL),
+	)
+
+	topic, err := svc.CurateFromText(ctx, "Faça um post sobre o l0gic_br4in/el-recrutador")
+	if err != nil {
+		t.Fatalf("CurateFromText: %v", err)
+	}
+	if topic.SourceURL != "https://codeberg.org/l0gic_br4in/el-recrutador" ||
+		!strings.Contains(topic.Summary, "Automated job search") {
+		t.Fatalf("expected codeberg fallback + README, got url=%q summary=%s", topic.SourceURL, topic.Summary)
+	}
+}
