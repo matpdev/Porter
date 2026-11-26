@@ -1,0 +1,33 @@
+# Maintainer: Matheus <matheus@sidequestlab.dev>
+pkgname=porter
+pkgver=0.1.0
+pkgrel=1
+pkgdesc="Porter & Odradek — autonomous technical publisher for LinkedIn and sidequestlab.dev"
+arch=('x86_64' 'aarch64')
+url="https://codeberg.org/matheus/porter"
+license=('MIT')
+depends=('chromium' 'nodejs' 'npm' 'git' 'ca-certificates' 'ttf-liberation')
+makedepends=('go')
+install=porter.install
+source=(
+  "porter.service"
+  "porter.sysusers"
+  "porter.tmpfiles"
+)
+sha256sums=('SKIP' 'SKIP' 'SKIP')
+
+build() {
+  # Build from the repository root (two levels above packaging/arch)
+  local repo_root="${startdir}/../.."
+  cd "$repo_root"
+  export CGO_ENABLED=0
+  export GOFLAGS="-buildmode=pie -trimpath -mod=readonly -modcacherw"
+  go build -ldflags="-s -w" -o "${srcdir}/porter" ./cmd/porter
+}
+
+package() {
+  install -Dm755 "${srcdir}/porter" "${pkgdir}/usr/bin/porter"
+  install -Dm644 "${srcdir}/porter.service" "${pkgdir}/usr/lib/systemd/system/porter.service"
+  install -Dm644 "${srcdir}/porter.sysusers" "${pkgdir}/usr/lib/sysusers.d/porter.conf"
+  install -Dm644 "${srcdir}/porter.tmpfiles" "${pkgdir}/usr/lib/tmpfiles.d/porter.conf"
+}

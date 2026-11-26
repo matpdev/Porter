@@ -1,0 +1,17 @@
+# Binaries & build outputs
+/porter
+/daemon
+*.exe
+*.test
+*.out
+
+# Local data & SQLite
+/data/
+*.db
+*.db-wal
+*.db-shm
+
+# OS / IDE
+.DS_Store
+.idea/
+.vscode/

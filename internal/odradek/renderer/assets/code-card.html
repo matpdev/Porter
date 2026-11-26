@@ -1,0 +1,103 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <link rel="stylesheet" href="/assets/github-dark.min.css" />
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      background: transparent;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      padding: 24px;
+      display: inline-block;
+    }
+    #card {
+      background: linear-gradient(135deg, #161b22 0%, #0d1117 100%);
+      border: 1px solid #30363d;
+      border-radius: 16px;
+      padding: 24px 28px;
+      min-width: 680px;
+      max-width: 1080px;
+      box-shadow: 0 20px 50px rgba(0, 0, 0, 0.45);
+    }
+    .header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 18px;
+    }
+    .dots { display: flex; gap: 8px; }
+    .dot { width: 12px; height: 12px; border-radius: 50%; }
+    .red { background: #ff5f56; }
+    .yellow { background: #ffbd2e; }
+    .green { background: #27c93f; }
+    .title {
+      color: #c9d1d9;
+      font-size: 14px;
+      font-weight: 600;
+      letter-spacing: 0.02em;
+    }
+    .lang {
+      color: #8b949e;
+      font-size: 12px;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+      text-transform: uppercase;
+      background: #21262d;
+      padding: 3px 10px;
+      border-radius: 999px;
+      border: 1px solid #30363d;
+    }
+    pre {
+      background: #0d1117 !important;
+      border: 1px solid #21262d;
+      border-radius: 10px;
+      padding: 18px 20px;
+      overflow: hidden;
+    }
+    code {
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+      font-size: 16px;
+      line-height: 1.55;
+      white-space: pre;
+    }
+    .footer {
+      margin-top: 14px;
+      text-align: right;
+      color: #6e7681;
+      font-size: 12px;
+      font-weight: 500;
+    }
+  </style>
+</head>
+<body>
+  <div id="card">
+    <div class="header">
+      <div class="dots">
+        <span class="dot red"></span>
+        <span class="dot yellow"></span>
+        <span class="dot green"></span>
+      </div>
+      <div class="title" id="card-title"></div>
+      <div class="lang" id="card-lang"></div>
+    </div>
+    <pre><code id="code-block"></code></pre>
+    <div class="footer">sidequestlab.dev</div>
+  </div>
+  <script src="/assets/highlight.min.js"></script>
+  <script>
+    window.renderCard = function(payload) {
+      document.getElementById("card-title").textContent = payload.title || "Code Snippet";
+      document.getElementById("card-lang").textContent = payload.language || "text";
+      const codeEl = document.getElementById("code-block");
+      codeEl.textContent = payload.content || "";
+      if (payload.language) {
+        codeEl.className = "language-" + payload.language;
+      }
+      if (window.hljs) {
+        window.hljs.highlightElement(codeEl);
+      }
+      window.__RENDER_READY = true;
+    };
+  </script>
+</body>
+</html>

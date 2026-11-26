@@ -1,0 +1,20 @@
+post_install() {
+  systemd-sysusers porter.conf
+  systemd-tmpfiles --create porter.conf
+  systemctl daemon-reload
+  systemctl enable --now porter.service
+  echo "==> Porter installed and started."
+  echo "==> Configure settings live (no restart needed for most keys):"
+  echo "    sudo -u porter porter --db /var/lib/porter/app.db config set telegram.bot_token <TOKEN>"
+}
+
+post_upgrade() {
+  systemd-sysusers porter.conf
+  systemd-tmpfiles --create porter.conf
+  systemctl daemon-reload
+  systemctl try-restart porter.service
+}
+
+pre_remove() {
+  systemctl disable --now porter.service || true
+}

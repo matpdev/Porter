@@ -1,0 +1,12 @@
+services:
+  porter:
+    build: .
+    container_name: porter-daemon
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:8787:8787"
+    volumes:
+      - ./data:/app/data
+      # Uncomment to let Porter publish MDX articles directly into your local sidequestlab.dev repo:
+      # - /Users/matheus/Projects/sidequestlab.dev:/sidequestlab.dev
+    command: ["daemon", "--db", "/app/data/app.db", "--media-dir", "/app/data/media"]
