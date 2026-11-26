@@ -132,14 +132,26 @@ func ValidateQAReview(r *QAReview) error {
 	return nil
 }
 
-// FormatForLinkedIn assembles the final post text respecting LinkedIn's 3000-character limit.
+// FormatForLinkedIn assembles the final post text respecting LinkedIn's 3000-character limit
+// and strips accidental duplicate opening/closing lines between Hook, Body, and CallToAction.
 func (d *PostDraft) FormatForLinkedIn() string {
+	hook := strings.TrimSpace(d.Hook)
+	body := strings.TrimSpace(d.Body)
+	cta := strings.TrimSpace(d.CallToAction)
+
+	if hook != "" && strings.HasPrefix(strings.ToLower(body), strings.ToLower(hook)) {
+		body = strings.TrimSpace(body[len(hook):])
+	}
+	if cta != "" && strings.HasSuffix(strings.ToLower(body), strings.ToLower(cta)) {
+		body = strings.TrimSpace(body[:len(body)-len(cta)])
+	}
+
 	tags := strings.Join(d.Hashtags, " ")
-	parts := []string{
-		strings.TrimSpace(d.Hook),
-		strings.TrimSpace(d.Body),
-		strings.TrimSpace(d.CallToAction),
-		tags,
+	var parts []string
+	for _, p := range []string{hook, body, cta, tags} {
+		if p != "" {
+			parts = append(parts, p)
+		}
 	}
 	full := strings.Join(parts, "\n\n")
 	if len(full) <= 3000 {

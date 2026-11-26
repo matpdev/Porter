@@ -67,6 +67,8 @@ func (w *WriterAgent) DraftPost(ctx context.Context, in WriterInput) (*PostDraft
 	systemPrompt := `You are a Senior Software Engineer writing technical LinkedIn posts in direct, natural English (en-US).
 Rules:
 - Communication tone: ` + toneInstruction + `
+- Do NOT repeat "hook" or "call_to_action" inside "body"; they are concatenated sequentially.
+- Only state facts, files, or features present in the Source Context; do NOT invent unverified claims.
 - NO AI cliches ("In today's fast-paced world", "Game-changer", "Delve into", "Revolutionize", "Let's unpack").
 - Write sharp, concrete engineering insights with short paragraphs and clean line breaks for LinkedIn readability.
 - Avoid emoji spam (at most 1-2 functional emojis if truly helpful, or zero).

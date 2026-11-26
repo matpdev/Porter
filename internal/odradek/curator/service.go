@@ -266,6 +266,11 @@ func (s *Service) CurateFromText(ctx context.Context, text string) (*CuratedTopi
 				title = req.FullName()
 			}
 		}
+	} else if strings.Contains(strings.ToLower(text), "github") || strings.Contains(strings.ToLower(text), "codeberg") {
+		// Language-agnostic fallback: if user mentions GitHub or Codeberg without owner/repo, pull recent activity.
+		if devlog, err := s.curateWeeklyDevlogWithHash(ctx, nil); err == nil && devlog.Summary != "" {
+			summary = fmt.Sprintf("User request: %s\n\n%s", text, devlog.Summary)
+		}
 	}
 
 	topicID, err := s.repo.SaveTopic(ctx, store.Topic{

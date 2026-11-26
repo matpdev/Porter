@@ -15,10 +15,11 @@ type Scheduler struct {
 	orch     *Orchestrator
 	logger   *slog.Logger
 
-	mu           sync.Mutex
-	c            *cron.Cron
-	cronExpr     string
-	reminderExpr string
+	mu            sync.Mutex
+	c             *cron.Cron
+	cronExpr      string
+	reminderExpr  string
+	analyticsExpr string
 }
 
 func NewScheduler(mgr *settings.Manager, orch *Orchestrator, logger *slog.Logger) *Scheduler {
@@ -64,11 +65,15 @@ func (s *Scheduler) Reload(ctx context.Context) error {
 	if err != nil || reminderExpr == "" {
 		reminderExpr = "0 10,18 * * *"
 	}
+	analyticsExpr, err := s.settings.GetString(ctx, settings.KeyAnalyticsReminderSchedule)
+	if err != nil || analyticsExpr == "" {
+		analyticsExpr = "0 19 * * *"
+	}
 
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	if s.c != nil && s.cronExpr == cronExpr && s.reminderExpr == reminderExpr {
+	if s.c != nil && s.cronExpr == cronExpr && s.reminderExpr == reminderExpr && s.analyticsExpr == analyticsExpr {
 		return nil
 	}
 
@@ -93,6 +98,16 @@ func (s *Scheduler) Reload(ctx context.Context) error {
 		return err
 	}
 
+	if _, err := newCron.AddFunc(analyticsExpr, func() {
+		anCtx, cancel := context.WithTimeout(context.Background(), 1*time.Minute)
+		defer cancel()
+		if err := s.orch.SendMetricsReminders(anCtx); err != nil {
+			s.logger.Error("metrics reminder failed", "err", err)
+		}
+	}); err != nil {
+		return err
+	}
+
 	if s.c != nil {
 		s.c.Stop()
 	}
@@ -100,7 +115,8 @@ func (s *Scheduler) Reload(ctx context.Context) error {
 	s.c = newCron
 	s.cronExpr = cronExpr
 	s.reminderExpr = reminderExpr
-	s.logger.Info("scheduler loaded", "cron", cronExpr, "reminders", reminderExpr)
+	s.analyticsExpr = analyticsExpr
+	s.logger.Info("scheduler loaded", "cron", cronExpr, "reminders", reminderExpr, "analytics", analyticsExpr)
 	return nil
 }
 

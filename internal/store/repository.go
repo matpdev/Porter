@@ -651,3 +651,182 @@ func (r *Repository) TouchOAuthTokenAlert(ctx context.Context, provider string) 
 	`, provider)
 	return err
 }
+
+// --- Post Metrics & Analytics ---
+
+type PostMetric struct {
+	ID          int64
+	PostID      string
+	Impressions int
+	Reactions   int
+	Comments    int
+	Reposts     int
+	RawNotes    string
+	CapturedAt  time.Time
+}
+
+func (r *Repository) InsertPostMetric(ctx context.Context, m PostMetric) error {
+	_, err := r.db.ExecContext(ctx, `
+		INSERT INTO post_metrics (post_id, impressions, reactions, comments, reposts, raw_notes)
+		VALUES (?, ?, ?, ?, ?, ?)
+	`, m.PostID, m.Impressions, m.Reactions, m.Comments, m.Reposts, m.RawNotes)
+	if err != nil {
+		return fmt.Errorf("insert post metric: %w", err)
+	}
+	return nil
+}
+
+func (r *Repository) TouchMetricsReminder(ctx context.Context, postID string) error {
+	_, err := r.db.ExecContext(ctx, `
+		UPDATE posts SET last_metrics_reminder_at = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP WHERE id = ?
+	`, postID)
+	return err
+}
+
+func (r *Repository) GetLatestPublishedPost(ctx context.Context) (*Post, error) {
+	var id string
+	err := r.db.QueryRowContext(ctx, `
+		SELECT id FROM posts
+		WHERE status = 'PUBLISHED' AND linkedin_post_urn != ''
+		ORDER BY published_at DESC LIMIT 1
+	`).Scan(&id)
+	if errors.Is(err, sql.ErrNoRows) {
+		return nil, ErrNotFound
+	}
+	if err != nil {
+		return nil, err
+	}
+	return r.GetPostByID(ctx, id)
+}
+
+// ListPostsNeedingMetricsReminder returns published LinkedIn posts older than intervalDays
+// that have no metrics captured since (now - intervalDays) and were not reminded within intervalDays.
+func (r *Repository) ListPostsNeedingMetricsReminder(ctx context.Context, intervalDays int) ([]Post, error) {
+	if intervalDays <= 0 {
+		intervalDays = 3
+	}
+	offset := fmt.Sprintf("-%d days", intervalDays)
+	rows, err := r.db.QueryContext(ctx, `
+		SELECT p.id
+		FROM posts p
+		WHERE p.status = 'PUBLISHED'
+		  AND p.linkedin_post_urn != ''
+		  AND p.linkedin_post_urn NOT LIKE 'urn:li:dryrun:%'
+		  AND p.published_at IS NOT NULL
+		  AND p.published_at <= datetime('now', ?)
+		  AND (p.last_metrics_reminder_at IS NULL OR p.last_metrics_reminder_at <= datetime('now', ?))
+		  AND NOT EXISTS (
+		      SELECT 1 FROM post_metrics m
+		      WHERE m.post_id = p.id AND m.captured_at >= datetime('now', ?)
+		  )
+		ORDER BY p.published_at DESC
+		LIMIT 5
+	`, offset, offset, offset)
+	if err != nil {
+		return nil, fmt.Errorf("list posts needing metrics reminder: %w", err)
+	}
+	defer rows.Close()
+
+	var ids []string
+	for rows.Next() {
+		var id string
+		if err := rows.Scan(&id); err != nil {
+			return nil, err
+		}
+		ids = append(ids, id)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+
+	var out []Post
+	for _, id := range ids {
+		p, err := r.GetPostByID(ctx, id)
+		if err == nil {
+			out = append(out, *p)
+		}
+	}
+	return out, nil
+}
+
+type AnalyticsSummary struct {
+	TotalPublished int
+	TotalQALogs    int
+	FirstTryPasses int
+	ByPattern      []PatternStats
+	ByMediaType    []MediaStats
+}
+
+type PatternStats struct {
+	PatternSlug    string
+	PostCount      int
+	AvgImpressions float64
+	AvgReactions   float64
+	AvgComments    float64
+}
+
+type MediaStats struct {
+	MediaType      string
+	PostCount      int
+	AvgImpressions float64
+	AvgReactions   float64
+}
+
+func (r *Repository) GetAnalyticsSummary(ctx context.Context) (*AnalyticsSummary, error) {
+	var sum AnalyticsSummary
+	_ = r.db.QueryRowContext(ctx, `SELECT COUNT(1) FROM posts WHERE status = 'PUBLISHED'`).Scan(&sum.TotalPublished)
+	_ = r.db.QueryRowContext(ctx, `SELECT COUNT(1) FROM qa_logs`).Scan(&sum.TotalQALogs)
+	_ = r.db.QueryRowContext(ctx, `SELECT COUNT(1) FROM qa_logs WHERE attempt_number = 1 AND qa_approved = 1`).Scan(&sum.FirstTryPasses)
+
+	pRows, err := r.db.QueryContext(ctx, `
+		SELECT COALESCE(p.pattern_slug, 'uncategorized'),
+		       COUNT(DISTINCT p.id),
+		       COALESCE(AVG(m.impressions), 0),
+		       COALESCE(AVG(m.reactions), 0),
+		       COALESCE(AVG(m.comments), 0)
+		FROM posts p
+		LEFT JOIN (
+			SELECT post_id, MAX(impressions) AS impressions, MAX(reactions) AS reactions, MAX(comments) AS comments
+			FROM post_metrics GROUP BY post_id
+		) m ON m.post_id = p.id
+		WHERE p.status = 'PUBLISHED'
+		GROUP BY COALESCE(p.pattern_slug, 'uncategorized')
+		ORDER BY AVG(m.impressions) DESC, COUNT(DISTINCT p.id) DESC
+		LIMIT 10
+	`)
+	if err == nil {
+		defer pRows.Close()
+		for pRows.Next() {
+			var ps PatternStats
+			if err := pRows.Scan(&ps.PatternSlug, &ps.PostCount, &ps.AvgImpressions, &ps.AvgReactions, &ps.AvgComments); err == nil {
+				sum.ByPattern = append(sum.ByPattern, ps)
+			}
+		}
+	}
+
+	mRows, err := r.db.QueryContext(ctx, `
+		SELECT p.media_type,
+		       COUNT(DISTINCT p.id),
+		       COALESCE(AVG(m.impressions), 0),
+		       COALESCE(AVG(m.reactions), 0)
+		FROM posts p
+		LEFT JOIN (
+			SELECT post_id, MAX(impressions) AS impressions, MAX(reactions) AS reactions
+			FROM post_metrics GROUP BY post_id
+		) m ON m.post_id = p.id
+		WHERE p.status = 'PUBLISHED'
+		GROUP BY p.media_type
+		ORDER BY AVG(m.impressions) DESC
+	`)
+	if err == nil {
+		defer mRows.Close()
+		for mRows.Next() {
+			var ms MediaStats
+			if err := mRows.Scan(&ms.MediaType, &ms.PostCount, &ms.AvgImpressions, &ms.AvgReactions); err == nil {
+				sum.ByMediaType = append(sum.ByMediaType, ms)
+			}
+		}
+	}
+
+	return &sum, nil
+}

@@ -23,31 +23,18 @@ func (r RepoRequest) FullName() string {
 
 var (
 	repoSlugRe   = regexp.MustCompile(`\b([a-zA-Z0-9_.-]+/[a-zA-Z0-9_.-]+)\b`)
-	branchHintRe = regexp.MustCompile(`(?i)\bbranch(?:\s+(?:called|named|de|chamada))?\s*[:=]?\s*([a-zA-Z0-9_./-]+)`)
+	branchHintRe = regexp.MustCompile(`(?i)\b(?:branch|br)\b(?:\s+\w+){0,2}?\s*[:=]?\s*([a-zA-Z0-9_./-]+)`)
 )
 
-// ParseRepoIntent detects an explicit GitHub/Codeberg repository and optional branch in free-form text.
+// ParseRepoIntent detects an explicit GitHub/Codeberg repository and optional branch in any language.
 func ParseRepoIntent(text string) (RepoRequest, bool) {
 	lower := strings.ToLower(text)
-	// Avoid false positives on generic slashes unless repo context is present.
-	hasForgeHint := strings.Contains(lower, "github") ||
-		strings.Contains(lower, "codeberg") ||
-		strings.Contains(lower, "branch") ||
-		strings.Contains(lower, "fork") ||
-		strings.Contains(lower, "repo")
-	if !hasForgeHint {
-		return RepoRequest{}, false
-	}
 
 	matches := repoSlugRe.FindAllStringSubmatch(text, -1)
 	var owner, repo string
 	for _, m := range matches {
 		parts := strings.SplitN(m[1], "/", 2)
-		if len(parts) != 2 {
-			continue
-		}
-		// Skip common non-repo pairs like "github.com/..." host prefix
-		if strings.Contains(parts[0], ".") {
+		if len(parts) != 2 || strings.Contains(parts[0], ".") {
 			continue
 		}
 		owner, repo = parts[0], strings.TrimRight(parts[1], ".,;:!?)")
@@ -64,7 +51,13 @@ func ParseRepoIntent(text string) (RepoRequest, bool) {
 
 	var branch string
 	if bm := branchHintRe.FindStringSubmatch(text); len(bm) >= 2 {
-		branch = strings.TrimRight(bm[1], ".,;:!?)")
+		candidate := strings.TrimRight(bm[1], ".,;:!?)")
+		// Ignore stop-words if user wrote "on branch" without a name
+		switch strings.ToLower(candidate) {
+		case "and", "e", "with", "com", "on", "no", "na", "in", "em":
+		default:
+			branch = candidate
+		}
 	}
 
 	return RepoRequest{

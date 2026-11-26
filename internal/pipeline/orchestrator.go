@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"codeberg.org/matheus/porter/internal/agents"
+	"codeberg.org/matheus/porter/internal/odradek"
 	"codeberg.org/matheus/porter/internal/odradek/curator"
 	"codeberg.org/matheus/porter/internal/settings"
 	"codeberg.org/matheus/porter/internal/store"
@@ -39,6 +40,10 @@ type QAPort interface {
 	Review(ctx context.Context, topicSummary string, draft *agents.PostDraft, pngPath string) (*agents.QAReview, error)
 }
 
+type AnalyticsPort interface {
+	ExtractFromImage(ctx context.Context, imgBytes []byte) (*odradek.ExtractedMetrics, error)
+}
+
 type LinkedInPort interface {
 	PublishPost(ctx context.Context, postID, text, pngPath string) (string, error)
 }
@@ -60,6 +65,7 @@ type Orchestrator struct {
 	writer    WriterPort
 	renderer  RendererPort
 	qa        QAPort
+	analytics AnalyticsPort
 	linkedin  LinkedInPort
 	sidequest SidequestPort
 	telegram  TelegramPort
@@ -93,6 +99,11 @@ func NewOrchestrator(
 		telegram:  tg,
 		logger:    logger,
 	}
+}
+
+func (o *Orchestrator) WithAnalytics(a AnalyticsPort) *Orchestrator {
+	o.analytics = a
+	return o
 }
 
 // --- telegram.IntakeHandler implementation ---
@@ -226,6 +237,53 @@ func (o *Orchestrator) HandleWeeklyDevlog(ctx context.Context) error {
 		return err
 	}
 	return o.RunTopic(ctx, *topic, false)
+}
+
+func (o *Orchestrator) HandlePhoto(ctx context.Context, imgBytes []byte, caption string) error {
+	if o.analytics == nil {
+		return errors.New("analytics extractor not configured")
+	}
+	metrics, err := o.analytics.ExtractFromImage(ctx, imgBytes)
+	if err != nil {
+		return err
+	}
+
+	post, err := o.repo.GetLatestPublishedPost(ctx)
+	if err != nil {
+		return fmt.Errorf("no published LinkedIn post found to attach metrics: %w", err)
+	}
+
+	notes := metrics.Notes
+	if caption != "" {
+		notes = caption + " | " + notes
+	}
+	if err := o.repo.InsertPostMetric(ctx, store.PostMetric{
+		PostID:      post.ID,
+		Impressions: metrics.Impressions,
+		Reactions:   metrics.Reactions,
+		Comments:    metrics.Comments,
+		Reposts:     metrics.Reposts,
+		RawNotes:    notes,
+	}); err != nil {
+		return err
+	}
+
+	if o.telegram != nil {
+		msg := fmt.Sprintf(
+			"📈 Metrics saved for post %s:\n• Impressions: %d\n• Reactions: %d\n• Comments: %d\n• Reposts: %d\n• Notes: %s\n\nRun /insights to see trends.",
+			post.ID[:8], metrics.Impressions, metrics.Reactions, metrics.Comments, metrics.Reposts, metrics.Notes,
+		)
+		_ = o.telegram.SendAlert(ctx, msg)
+	}
+	return nil
+}
+
+func (o *Orchestrator) HandleInsights(ctx context.Context) (string, error) {
+	sum, err := o.repo.GetAnalyticsSummary(ctx)
+	if err != nil {
+		return "", err
+	}
+	return odradek.FormatInsightsReport(sum), nil
 }
 
 func (o *Orchestrator) RunTopic(ctx context.Context, topic curator.CuratedTopic, isScheduled bool) error {
@@ -446,12 +504,39 @@ func (o *Orchestrator) deliverLoadedPost(ctx context.Context, post *store.Post, 
 
 	if o.telegram != nil {
 		msg := fmt.Sprintf("📦 Porter delivered post %s\n• LinkedIn: %s", post.ID[:8], liURN)
+		if liURN != "" && !strings.HasPrefix(liURN, "urn:li:dryrun:") {
+			msg += fmt.Sprintf("\n• Link: https://www.linkedin.com/feed/update/%s/", liURN)
+		}
 		if sqPath != "" {
 			msg += "\n• sidequestlab.dev: " + sqPath
 		}
 		_ = o.telegram.SendAlert(ctx, msg)
 	}
 	return nil
+}
+
+// SendMetricsReminders notifies the user every X days to screenshot LinkedIn Analytics for recent posts.
+func (o *Orchestrator) SendMetricsReminders(ctx context.Context) error {
+	if o.telegram == nil {
+		return nil
+	}
+	days, err := o.settings.GetInt(ctx, settings.KeyAnalyticsReminderDays)
+	if err != nil || days <= 0 {
+		days = 3
+	}
+	posts, err := o.repo.ListPostsNeedingMetricsReminder(ctx, days)
+	if err != nil || len(posts) == 0 {
+		return err
+	}
+
+	var lines []string
+	for _, p := range posts {
+		lines = append(lines, fmt.Sprintf("• https://www.linkedin.com/feed/update/%s/", p.LinkedInPostURN))
+		_ = o.repo.TouchMetricsReminder(ctx, p.ID)
+	}
+	msg := fmt.Sprintf("📊 Time to check growth (%dd+ since publish)!\nOpen the post(s) below, take an Analytics screenshot, and send the image right here:\n\n%s",
+		days, strings.Join(lines, "\n"))
+	return o.telegram.SendAlert(ctx, msg)
 }
 
 // SendPendingReminders pings the user about posts awaiting review due to new topics or doubts.

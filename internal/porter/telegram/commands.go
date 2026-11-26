@@ -68,6 +68,7 @@ func (s *BotService) handleHelp(ctx context.Context, b *bot.Bot, update *models.
 				"/trust <slug> [guidelines] — trust pattern for auto-publish",
 				"/run — run scheduled curation pipeline now",
 				"/devlog — draft weekly update from GitHub & Codeberg",
+				"/insights — view QA quality & LinkedIn growth insights",
 				"/auth — connect/renew LinkedIn OAuth2",
 			}, "\n"),
 		})
@@ -282,6 +283,15 @@ func (s *BotService) handleDevlog(ctx context.Context, b *bot.Bot, update *model
 	}(update.Message.Chat.ID)
 }
 
+func (s *BotService) handleInsights(ctx context.Context, b *bot.Bot, update *models.Update) {
+	report, err := s.intake.HandleInsights(ctx)
+	if err != nil {
+		s.reply(ctx, b, update, "❌ Insights failed: "+err.Error())
+		return
+	}
+	s.reply(ctx, b, update, report)
+}
+
 func (s *BotService) handleAuth(ctx context.Context, b *bot.Bot, update *models.Update) {
 	if s.oauth == nil {
 		s.reply(ctx, b, update, "OAuth service unavailable.")
@@ -320,6 +330,27 @@ func (s *BotService) handleDefault(ctx context.Context, b *bot.Bot, update *mode
 	}
 	ok, _, err := s.IsAuthorized(ctx, update.Message.From.ID)
 	if err != nil || !ok {
+		return
+	}
+
+	if len(update.Message.Photo) > 0 {
+		// Pick highest-resolution photo (last element)
+		fileID := update.Message.Photo[len(update.Message.Photo)-1].FileID
+		caption := strings.TrimSpace(update.Message.Caption)
+		chatID := update.Message.Chat.ID
+		s.reply(ctx, b, update, "📊 Reading LinkedIn Analytics screenshot...")
+		go func() {
+			runCtx, cancel := context.WithTimeout(context.Background(), 3*time.Minute)
+			defer cancel()
+			imgBytes, err := s.DownloadFile(runCtx, fileID)
+			if err != nil {
+				_, _ = b.SendMessage(context.Background(), &bot.SendMessageParams{ChatID: chatID, Text: "❌ " + err.Error()})
+				return
+			}
+			if err := s.intake.HandlePhoto(runCtx, imgBytes, caption); err != nil {
+				_, _ = b.SendMessage(context.Background(), &bot.SendMessageParams{ChatID: chatID, Text: "❌ " + err.Error()})
+			}
+		}()
 		return
 	}
 

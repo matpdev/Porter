@@ -22,9 +22,11 @@ type IntakeHandler interface {
 	HandleTextIdea(ctx context.Context, text string) error
 	HandleLink(ctx context.Context, url string) error
 	HandleVoice(ctx context.Context, fileID string) error
+	HandlePhoto(ctx context.Context, imgBytes []byte, caption string) error
 	HandlePostAction(ctx context.Context, action, postID string) error
 	HandleRunNow(ctx context.Context) error
 	HandleWeeklyDevlog(ctx context.Context) error
+	HandleInsights(ctx context.Context) (string, error)
 }
 
 type noopIntake struct{}
@@ -38,6 +40,9 @@ func (noopIntake) HandleLink(context.Context, string) error {
 func (noopIntake) HandleVoice(context.Context, string) error {
 	return fmt.Errorf("Odradek audio curator not wired yet (Milestone 3)")
 }
+func (noopIntake) HandlePhoto(context.Context, []byte, string) error {
+	return fmt.Errorf("Odradek analytics not wired yet")
+}
 func (noopIntake) HandlePostAction(context.Context, string, string) error {
 	return fmt.Errorf("Orchestrator actions not wired yet (Milestone 5)")
 }
@@ -46,6 +51,9 @@ func (noopIntake) HandleRunNow(context.Context) error {
 }
 func (noopIntake) HandleWeeklyDevlog(context.Context) error {
 	return fmt.Errorf("Orchestrator not wired yet")
+}
+func (noopIntake) HandleInsights(context.Context) (string, error) {
+	return "", fmt.Errorf("Orchestrator not wired yet")
 }
 
 type BotService struct {
@@ -108,6 +116,7 @@ func (s *BotService) Start(ctx context.Context, token string) error {
 	b.RegisterHandler(bot.HandlerTypeMessageText, "/trust", bot.MatchTypePrefix, s.withAdmin(s.handleTrust))
 	b.RegisterHandler(bot.HandlerTypeMessageText, "/run", bot.MatchTypePrefix, s.withAdmin(s.handleRun))
 	b.RegisterHandler(bot.HandlerTypeMessageText, "/devlog", bot.MatchTypePrefix, s.withAdmin(s.handleDevlog))
+	b.RegisterHandler(bot.HandlerTypeMessageText, "/insights", bot.MatchTypePrefix, s.withAdmin(s.handleInsights))
 	b.RegisterHandler(bot.HandlerTypeMessageText, "/auth", bot.MatchTypePrefix, s.withAdmin(s.handleAuth))
 	b.RegisterHandler(bot.HandlerTypeCallbackQueryData, "", bot.MatchTypePrefix, s.handleCallback)
 

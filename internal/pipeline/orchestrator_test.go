@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"codeberg.org/matheus/porter/internal/agents"
+	"codeberg.org/matheus/porter/internal/odradek"
 	"codeberg.org/matheus/porter/internal/odradek/curator"
 	"codeberg.org/matheus/porter/internal/pipeline"
 	"codeberg.org/matheus/porter/internal/settings"
@@ -175,5 +176,46 @@ func TestOrchestratorTrustedTopicAutoPublishesOnSchedule(t *testing.T) {
 	}
 	if li.published != 1 || tg.previews != 0 {
 		t.Fatalf("trusted topic with high confidence should auto-publish: published=%d previews=%d", li.published, tg.previews)
+	}
+}
+
+type mockAnalytics struct{}
+
+func (m *mockAnalytics) ExtractFromImage(_ context.Context, _ []byte) (*odradek.ExtractedMetrics, error) {
+	return &odradek.ExtractedMetrics{
+		Impressions: 2450,
+		Reactions:   48,
+		Comments:    9,
+		Reposts:     4,
+		Notes:       "Strong reach on Mermaid diagram",
+	}, nil
+}
+
+func TestOrchestratorHandlePhotoAndInsights(t *testing.T) {
+	ctx := context.Background()
+	repo, mgr := setupOrchDB(t)
+
+	_, _ = repo.GetOrCreatePattern(ctx, "go-concurrency", "Go Concurrency")
+	_ = repo.SetPatternTrust(ctx, "go-concurrency", true, "")
+
+	tg := &mockTelegram{}
+	orch := pipeline.NewOrchestrator(repo, mgr, nil, &mockWriter{}, nil, &mockQA{}, &mockLinkedIn{}, nil, tg, nil).
+		WithAnalytics(&mockAnalytics{})
+
+	if err := orch.RunTopic(ctx, curator.CuratedTopic{
+		SourceType:     "weekly_theme",
+		Title:          "Go Concurrency",
+		Summary:        "errgroup",
+		TargetLinkedIn: true,
+	}, true); err != nil {
+		t.Fatalf("RunTopic: %v", err)
+	}
+
+	if err := orch.HandlePhoto(ctx, []byte("fake-jpg"), "3 days later"); err != nil {
+		t.Fatalf("HandlePhoto: %v", err)
+	}
+	report, err := orch.HandleInsights(ctx)
+	if err != nil || !strings.Contains(report, "2450 impr") {
+		t.Fatalf("expected insights report with 2450 impr, got %q (err=%v)", report, err)
 	}
 }

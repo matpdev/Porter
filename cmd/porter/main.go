@@ -95,12 +95,13 @@ func daemonCmd(dbPath, mediaDir *string) *cobra.Command {
 			liClient := linkedin.NewClient(repo, mgr, nil)
 			sqPub := sidequest.NewPublisher(mgr)
 
-			orch := pipeline.NewOrchestrator(repo, mgr, curSvc, writer, rend, qa, liClient, sqPub, botSvc, logger)
+			orch := pipeline.NewOrchestrator(repo, mgr, curSvc, writer, rend, qa, liClient, sqPub, botSvc, logger).
+				WithAnalytics(odradek.NewAnalyticsExtractor(mgr))
 			sched := pipeline.NewScheduler(mgr, orch, logger)
 
 			botSvc.SetIntakeHandler(orch)
 			botSvc.SetOnSettingChanged(func(key string) {
-				if key == settings.KeyCronSchedule || key == settings.KeyReviewReminderSchedule {
+				if key == settings.KeyCronSchedule || key == settings.KeyReviewReminderSchedule || key == settings.KeyAnalyticsReminderSchedule {
 					_ = sched.Reload(ctx)
 				}
 			})

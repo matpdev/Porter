@@ -33,6 +33,13 @@ func TestPostDraftValidationAndFormatting(t *testing.T) {
 		t.Fatalf("unexpected formatted output: %q", formatted)
 	}
 
+	// Ensure duplicate hook at the start of body is stripped.
+	dup := *valid
+	dup.Body = dup.Hook + "\n\n" + dup.Body
+	if strings.Count(dup.FormatForLinkedIn(), dup.Hook) != 1 {
+		t.Fatalf("expected duplicate hook to be stripped, got:\n%s", dup.FormatForLinkedIn())
+	}
+
 	invalid := *valid
 	invalid.Media.Content = ""
 	if err := agents.ValidatePostDraft(&invalid); err == nil {

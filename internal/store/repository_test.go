@@ -145,4 +145,18 @@ func TestWeeklyThemesAndPostsLifecycle(t *testing.T) {
 	if err != nil || tok.PersonURN != "urn:li:person:123" {
 		t.Fatalf("unexpected token: %+v, err=%v", tok, err)
 	}
+
+	if err := repo.InsertPostMetric(ctx, store.PostMetric{
+		PostID:      postID,
+		Impressions: 1200,
+		Reactions:   35,
+		Comments:    6,
+		Reposts:     2,
+	}); err != nil {
+		t.Fatalf("insert post metric: %v", err)
+	}
+	sum, err := repo.GetAnalyticsSummary(ctx)
+	if err != nil || sum.TotalPublished != 1 || len(sum.ByMediaType) == 0 {
+		t.Fatalf("unexpected analytics summary: %+v, err=%v", sum, err)
+	}
 }

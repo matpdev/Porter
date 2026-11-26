@@ -39,6 +39,8 @@ const (
 	KeyCuratorCodebergUsername   = "curator.codeberg_username"
 	KeyCuratorCodebergToken      = "curator.codeberg_token"
 	KeyCuratorGitRepos           = "curator.git_repos"
+	KeyAnalyticsReminderDays     = "analytics.reminder_interval_days"
+	KeyAnalyticsReminderSchedule = "analytics.reminder_schedule"
 )
 
 type definition struct {
@@ -77,6 +79,8 @@ var defaults = []definition{
 	{Key: KeyCuratorCodebergUsername, DefaultValue: "", IsSecret: false},
 	{Key: KeyCuratorCodebergToken, DefaultValue: "", IsSecret: true},
 	{Key: KeyCuratorGitRepos, DefaultValue: "", IsSecret: false},
+	{Key: KeyAnalyticsReminderDays, DefaultValue: "3", IsSecret: false},
+	{Key: KeyAnalyticsReminderSchedule, DefaultValue: "0 19 * * *", IsSecret: false},
 }
 
 // Manager provides live, restart-free access to runtime settings backed by SQLite.
