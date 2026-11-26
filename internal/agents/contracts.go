@@ -40,17 +40,21 @@ type PostDraft struct {
 	WriterNotes       string    `json:"writer_notes,omitempty" jsonschema:"description=Brief notes on choices or fixes applied after QA feedback"`
 }
 
-// SidequestArticle is the structured output for publishing a full MDX post to sidequestlab.dev.
+// SidequestArticle is the structured output for publishing bilingual (EN + PT) MDX posts to sidequestlab.dev.
 type SidequestArticle struct {
-	Slug         string   `json:"slug" validate:"required,min=3,max=80" jsonschema:"description=URL-friendly kebab-case slug"`
-	Title        string   `json:"title" validate:"required,min=5,max=120"`
-	Description  string   `json:"description" validate:"required,min=20,max=260"`
-	Type         string   `json:"type" validate:"required,min=2,max=40"`
-	Area         string   `json:"area" validate:"required,min=2,max=40"`
-	Tags         []string `json:"tags" validate:"required,min=1,max=8"`
-	Stack        []string `json:"stack" validate:"required,min=1,max=8"`
-	CoverAlt     string   `json:"cover_alt" validate:"max=180"`
-	MarkdownBody string   `json:"markdown_body" validate:"required,min=300"`
+	Slug           string   `json:"slug" validate:"required,min=3,max=80" jsonschema:"description=URL-friendly kebab-case slug shared by EN and PT files"`
+	Title          string   `json:"title" validate:"required,min=5,max=120" jsonschema:"description=English article title"`
+	Description    string   `json:"description" validate:"required,min=20,max=260" jsonschema:"description=English meta description"`
+	TitlePT        string   `json:"title_pt" validate:"required,min=5,max=120" jsonschema:"description=Portuguese (PT-BR) article title"`
+	DescriptionPT  string   `json:"description_pt" validate:"required,min=20,max=260" jsonschema:"description=Portuguese (PT-BR) meta description"`
+	Type           string   `json:"type" validate:"required,oneof=acerto erro ideia plano life" jsonschema:"enum=acerto,enum=erro,enum=ideia,enum=plano,enum=life"`
+	Area           string   `json:"area" validate:"required,oneof=embarcados backend frontend mobile web jogos all" jsonschema:"enum=embarcados,enum=backend,enum=frontend,enum=mobile,enum=web,enum=jogos,enum=all"`
+	Tags           []string `json:"tags" validate:"required,min=1,max=8"`
+	Stack          []string `json:"stack" validate:"required,min=1,max=8"`
+	CoverAlt       string   `json:"cover_alt" validate:"max=180"`
+	CoverAltPT     string   `json:"cover_alt_pt" validate:"max=180"`
+	MarkdownBody   string   `json:"markdown_body" validate:"required,min=300" jsonschema:"description=Full technical article body in English Markdown (no frontmatter)"`
+	MarkdownBodyPT string   `json:"markdown_body_pt" validate:"required,min=300" jsonschema:"description=Full technical article body in Portuguese PT-BR Markdown (no frontmatter)"`
 }
 
 type QAIssue struct {

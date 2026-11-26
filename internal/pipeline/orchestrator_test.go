@@ -32,14 +32,17 @@ func (m *mockWriter) DraftPost(_ context.Context, in agents.WriterInput) (*agent
 
 func (m *mockWriter) DraftSidequestArticle(_ context.Context, _ agents.WriterInput, _ *agents.PostDraft) (*agents.SidequestArticle, error) {
 	return &agents.SidequestArticle{
-		Slug:         "go-concurrency",
-		Title:        "Structured Concurrency in Go",
-		Description:  "Preventing goroutine leaks with errgroup and context.",
-		Type:         "article",
-		Area:         "backend",
-		Tags:         []string{"go"},
-		Stack:        []string{"Go"},
-		MarkdownBody: strings.Repeat("Content. ", 50),
+		Slug:           "go-concurrency",
+		Title:          "Structured Concurrency in Go",
+		Description:    "Preventing goroutine leaks with errgroup and context.",
+		TitlePT:        "Concorrência estruturada em Go",
+		DescriptionPT:  "Evitando vazamento de goroutines com errgroup e context.",
+		Type:           "acerto",
+		Area:           "backend",
+		Tags:           []string{"go"},
+		Stack:          []string{"Go"},
+		MarkdownBody:   strings.Repeat("Content. ", 50),
+		MarkdownBodyPT: strings.Repeat("Conteúdo. ", 50),
 	}, nil
 }
 

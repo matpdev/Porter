@@ -136,13 +136,25 @@ func (w *WriterAgent) DraftSidequestArticle(ctx context.Context, in WriterInput,
 		return nil, fmt.Errorf("build SidequestArticle schema: %w", err)
 	}
 
-	systemPrompt := `You are a Senior Software Engineer writing a deep-dive technical blog article in English for sidequestlab.dev (Astro MDX).
+	systemPrompt := `You are a Senior Software Engineer writing a deep-dive bilingual technical blog article (both English and Portuguese PT-BR) for sidequestlab.dev (Astro MDX).
+Rules:
+- "type" MUST be one of: acerto, erro, ideia, plano, life.
+- "area" MUST be one of: embarcados, backend, frontend, mobile, web, jogos, all.
+- Keep technical terms in English inside the PT-BR version where natural.
+- Do NOT include YAML frontmatter inside markdown_body or markdown_body_pt.
 Return ONLY valid JSON matching this schema:
 ` + string(schemaBytes)
 
+	postContext := ""
+	if draft != nil {
+		postContext = draft.FormatForLinkedIn()
+	} else {
+		postContext = in.Topic.Summary
+	}
+
 	userPrompt := fmt.Sprintf(
-		"Expand this topic and LinkedIn post into a thorough, practical engineering article in Markdown (no frontmatter in markdown_body).\n\nTitle: %s\nAngle: %s\nLinkedIn Post:\n%s\n\nSource Context:\n%s",
-		in.Topic.Title, in.Topic.Angle, draft.FormatForLinkedIn(), in.Topic.Summary,
+		"Expand this topic and LinkedIn post into a thorough, practical bilingual engineering article (EN + PT-BR).\n\nTitle: %s\nAngle: %s\nLinkedIn Post:\n%s\n\nSource Context:\n%s",
+		in.Topic.Title, in.Topic.Angle, postContext, in.Topic.Summary,
 	)
 
 	resp, err := client.CreateChatCompletion(ctx, openai.ChatCompletionRequest{

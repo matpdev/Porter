@@ -22,6 +22,8 @@ func NewPublisher(mgr *settings.Manager) *Publisher {
 	return &Publisher{settings: mgr}
 }
 
+// PublishArticle writes bilingual (EN + PT) Astro MDX files and cover PNGs to sidequestlab.dev,
+// and commits + pushes to GitHub when sidequest.auto_commit is enabled.
 func (p *Publisher) PublishArticle(ctx context.Context, article *agents.SidequestArticle, coverPNGPath string) (string, error) {
 	repoPath, err := p.settings.GetString(ctx, settings.KeySidequestRepoPath)
 	if err != nil || strings.TrimSpace(repoPath) == "" {
@@ -33,17 +35,39 @@ func (p *Publisher) PublishArticle(ctx context.Context, article *agents.Sideques
 	dryRun, _ := p.settings.GetBool(ctx, settings.KeyDryRun)
 	autoCommit, _ := p.settings.GetBool(ctx, settings.KeySidequestAutoCommit)
 
-	blogDir := filepath.Join(repoPath, "src", "content", "blog", "en")
-	if err := os.MkdirAll(blogDir, 0o755); err != nil {
-		return "", fmt.Errorf("create blog dir %s: %w", blogDir, err)
-	}
-
 	slug := sanitizeSlug(article.Slug)
-	mdxRelPath := filepath.ToSlash(filepath.Join("src", "content", "blog", "en", slug+".mdx"))
-	mdxFullPath := filepath.Join(blogDir, slug+".mdx")
+	enRelPath := filepath.ToSlash(filepath.Join("src", "content", "blog", "en", slug+".mdx"))
+	ptRelPath := filepath.ToSlash(filepath.Join("src", "content", "blog", "pt", slug+".mdx"))
 
 	if dryRun {
-		return "dryrun:" + mdxRelPath, nil
+		return "dryrun:" + enRelPath + " + " + ptRelPath, nil
+	}
+
+	if err := writeLocalizedMDX(repoPath, "en", slug, article.Title, article.Description, article.CoverAlt, article.MarkdownBody, article, coverPNGPath, draft); err != nil {
+		return "", err
+	}
+	if err := writeLocalizedMDX(repoPath, "pt", slug, article.TitlePT, article.DescriptionPT, article.CoverAltPT, article.MarkdownBodyPT, article, coverPNGPath, draft); err != nil {
+		return "", err
+	}
+
+	if autoCommit {
+		if err := gitCommitAndPush(ctx, repoPath, slug); err != nil {
+			return enRelPath, fmt.Errorf("mdx written, but git commit/push failed: %w", err)
+		}
+	}
+
+	return enRelPath + " + " + ptRelPath, nil
+}
+
+func writeLocalizedMDX(
+	repoPath, lang, slug, title, desc, coverAlt, body string,
+	article *agents.SidequestArticle,
+	coverPNGPath string,
+	draft bool,
+) error {
+	blogDir := filepath.Join(repoPath, "src", "content", "blog", lang)
+	if err := os.MkdirAll(blogDir, 0o755); err != nil {
+		return fmt.Errorf("create blog dir %s: %w", blogDir, err)
 	}
 
 	var coverLine string
@@ -51,16 +75,16 @@ func (p *Publisher) PublishArticle(ctx context.Context, article *agents.Sideques
 		coverFile := slug + "-cover.png"
 		if err := copyFile(coverPNGPath, filepath.Join(blogDir, coverFile)); err == nil {
 			coverLine = fmt.Sprintf("cover: ./%s\n", coverFile)
-			if article.CoverAlt != "" {
-				coverLine += fmt.Sprintf("coverAlt: %q\n", article.CoverAlt)
+			if coverAlt != "" {
+				coverLine += fmt.Sprintf("coverAlt: %q\n", coverAlt)
 			}
 		}
 	}
 
 	var sb strings.Builder
 	sb.WriteString("---\n")
-	sb.WriteString(fmt.Sprintf("title: %q\n", article.Title))
-	sb.WriteString(fmt.Sprintf("description: %q\n", article.Description))
+	sb.WriteString(fmt.Sprintf("title: %q\n", title))
+	sb.WriteString(fmt.Sprintf("description: %q\n", desc))
 	sb.WriteString(fmt.Sprintf("date: %s\n", time.Now().UTC().Format("2006-01-02")))
 	sb.WriteString(fmt.Sprintf("type: %s\n", article.Type))
 	sb.WriteString(fmt.Sprintf("area: %s\n", article.Area))
@@ -77,18 +101,14 @@ func (p *Publisher) PublishArticle(ctx context.Context, article *agents.Sideques
 	}
 	sb.WriteString(fmt.Sprintf("draft: %v\n", draft))
 	sb.WriteString("---\n\n")
-	sb.WriteString(strings.TrimSpace(article.MarkdownBody))
+	sb.WriteString(strings.TrimSpace(body))
 	sb.WriteString("\n")
 
+	mdxFullPath := filepath.Join(blogDir, slug+".mdx")
 	if err := os.WriteFile(mdxFullPath, []byte(sb.String()), 0o644); err != nil {
-		return "", fmt.Errorf("write mdx %s: %w", mdxFullPath, err)
+		return fmt.Errorf("write mdx %s: %w", mdxFullPath, err)
 	}
-
-	if autoCommit {
-		_ = gitCommit(ctx, repoPath, slug)
-	}
-
-	return mdxRelPath, nil
+	return nil
 }
 
 func sanitizeSlug(s string) string {
@@ -118,11 +138,21 @@ func copyFile(src, dst string) error {
 	return err
 }
 
-func gitCommit(ctx context.Context, repoPath, slug string) error {
-	add := exec.CommandContext(ctx, "git", "-C", repoPath, "add", filepath.Join("src", "content", "blog", "en"))
-	if err := add.Run(); err != nil {
-		return err
+func gitCommitAndPush(ctx context.Context, repoPath, slug string) error {
+	add := exec.CommandContext(ctx, "git", "-C", repoPath, "add",
+		filepath.Join("src", "content", "blog", "en"),
+		filepath.Join("src", "content", "blog", "pt"),
+	)
+	if out, err := add.CombinedOutput(); err != nil {
+		return fmt.Errorf("git add: %w (%s)", err, string(out))
 	}
 	commit := exec.CommandContext(ctx, "git", "-C", repoPath, "commit", "-m", "feat(blog): add "+slug)
-	return commit.Run()
+	if out, err := commit.CombinedOutput(); err != nil {
+		return fmt.Errorf("git commit: %w (%s)", err, string(out))
+	}
+	push := exec.CommandContext(ctx, "git", "-C", repoPath, "push")
+	if out, err := push.CombinedOutput(); err != nil {
+		return fmt.Errorf("git push: %w (%s)", err, string(out))
+	}
+	return nil
 }

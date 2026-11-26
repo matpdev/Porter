@@ -27,36 +27,41 @@ func TestPublishArticleMDXAndCover(t *testing.T) {
 
 	fakeRepo := t.TempDir()
 	_ = mgr.Set(ctx, settings.KeySidequestRepoPath, fakeRepo)
-	_ = mgr.Set(ctx, settings.KeySidequestDraft, "true")
+	_ = mgr.Set(ctx, settings.KeySidequestDraft, "false")
+	_ = mgr.Set(ctx, settings.KeySidequestAutoCommit, "false")
 
 	coverPath := filepath.Join(t.TempDir(), "cover.png")
 	_ = os.WriteFile(coverPath, []byte("png"), 0o644)
 
 	pub := sidequest.NewPublisher(mgr)
-	relPath, err := pub.PublishArticle(ctx, &agents.SidequestArticle{
-		Slug:         "sqlite-wal-go",
-		Title:        "SQLite WAL Mode in Go",
-		Description:  "How single-writer WAL mode simplifies local-first Go daemons.",
-		Type:         "article",
-		Area:         "backend",
-		Tags:         []string{"go", "sqlite"},
-		Stack:        []string{"Go", "SQLite"},
-		CoverAlt:     "SQLite WAL snippet",
-		MarkdownBody: "## Why WAL\n\n" + strings.Repeat("WAL mode allows concurrent readers. ", 10),
+	relPaths, err := pub.PublishArticle(ctx, &agents.SidequestArticle{
+		Slug:           "sqlite-wal-go",
+		Title:          "SQLite WAL Mode in Go",
+		Description:    "How single-writer WAL mode simplifies local-first Go daemons.",
+		TitlePT:        "SQLite em modo WAL com Go",
+		DescriptionPT:  "Como o modo WAL simplifica daemons local-first em Go.",
+		Type:           "acerto",
+		Area:           "backend",
+		Tags:           []string{"go", "sqlite"},
+		Stack:          []string{"Go", "SQLite"},
+		CoverAlt:       "SQLite WAL snippet",
+		CoverAltPT:     "Snippet SQLite WAL",
+		MarkdownBody:   "## Why WAL\n\n" + strings.Repeat("WAL mode allows concurrent readers. ", 10),
+		MarkdownBodyPT: "## Por que WAL\n\n" + strings.Repeat("O modo WAL permite leituras concorrentes. ", 10),
 	}, coverPath)
 	if err != nil {
 		t.Fatalf("PublishArticle: %v", err)
 	}
-	if relPath != "src/content/blog/en/sqlite-wal-go.mdx" {
-		t.Fatalf("unexpected relPath: %q", relPath)
+	if !strings.Contains(relPaths, "en/sqlite-wal-go.mdx") || !strings.Contains(relPaths, "pt/sqlite-wal-go.mdx") {
+		t.Fatalf("unexpected relPaths: %q", relPaths)
 	}
 
-	mdxBytes, err := os.ReadFile(filepath.Join(fakeRepo, relPath))
-	if err != nil {
-		t.Fatalf("read mdx: %v", err)
+	enBytes, err := os.ReadFile(filepath.Join(fakeRepo, "src/content/blog/en/sqlite-wal-go.mdx"))
+	if err != nil || !strings.Contains(string(enBytes), "cover: ./sqlite-wal-go-cover.png") || !strings.Contains(string(enBytes), "draft: false") {
+		t.Fatalf("unexpected EN MDX: err=%v\n%s", err, string(enBytes))
 	}
-	if !strings.Contains(string(mdxBytes), "cover: ./sqlite-wal-go-cover.png") ||
-		!strings.Contains(string(mdxBytes), "draft: true") {
-		t.Fatalf("unexpected MDX content:\n%s", string(mdxBytes))
+	ptBytes, err := os.ReadFile(filepath.Join(fakeRepo, "src/content/blog/pt/sqlite-wal-go.mdx"))
+	if err != nil || !strings.Contains(string(ptBytes), "SQLite em modo WAL com Go") {
+		t.Fatalf("unexpected PT MDX: err=%v\n%s", err, string(ptBytes))
 	}
 }

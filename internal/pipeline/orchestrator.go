@@ -417,10 +417,21 @@ func (o *Orchestrator) deliverLoadedPost(ctx context.Context, post *store.Post, 
 	}
 
 	sqEnabled, _ := o.settings.GetBool(ctx, settings.KeySidequestEnabled)
-	if (post.PublishToSidequest || sqEnabled) && o.sidequest != nil && draft != nil {
+	if (post.PublishToSidequest || sqEnabled) && o.sidequest != nil && o.writer != nil {
 		article, err := o.writer.DraftSidequestArticle(ctx, agents.WriterInput{Topic: topic}, draft)
-		if err == nil {
-			if p, err := o.sidequest.PublishArticle(ctx, article, post.MediaPath); err == nil {
+		if err != nil {
+			o.logger.Error("sidequest article draft failed", "post_id", post.ID, "err", err)
+			if o.telegram != nil {
+				_ = o.telegram.SendAlert(ctx, "⚠️ LinkedIn OK, but sidequestlab.dev draft failed: "+err.Error())
+			}
+		} else {
+			p, err := o.sidequest.PublishArticle(ctx, article, post.MediaPath)
+			if err != nil {
+				o.logger.Error("sidequest publish failed", "post_id", post.ID, "err", err)
+				if o.telegram != nil {
+					_ = o.telegram.SendAlert(ctx, "⚠️ sidequestlab.dev publish error: "+err.Error())
+				}
+			} else {
 				sqPath = p
 			}
 		}
