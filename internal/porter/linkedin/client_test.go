@@ -32,6 +32,7 @@ func TestPublishPostWithImageAndDryRun(t *testing.T) {
 
 	var srv *httptest.Server
 	var uploaded, posted bool
+	var capturedCommentary string
 	srv = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
 		case "/rest/images":
@@ -48,6 +49,11 @@ func TestPublishPostWithImageAndDryRun(t *testing.T) {
 			}
 		case "/rest/posts":
 			posted = true
+			var body struct {
+				Commentary string `json:"commentary"`
+			}
+			_ = json.NewDecoder(r.Body).Decode(&body)
+			capturedCommentary = body.Commentary
 			w.Header().Set("x-restli-id", "urn:li:share:777")
 			w.WriteHeader(http.StatusCreated)
 		default:
@@ -57,12 +63,15 @@ func TestPublishPostWithImageAndDryRun(t *testing.T) {
 	defer srv.Close()
 
 	client := linkedin.NewClient(repo, mgr, srv.Client()).WithBaseURL(srv.URL)
-	urn, err := client.PublishPost(ctx, "post-1", "Hello LinkedIn", pngPath)
+	urn, err := client.PublishPost(ctx, "post-1", "Hello LinkedIn (Rust core) #Go", pngPath)
 	if err != nil {
 		t.Fatalf("PublishPost: %v", err)
 	}
 	if !uploaded || !posted || urn != "urn:li:share:777" {
 		t.Fatalf("unexpected publish state: uploaded=%v posted=%v urn=%q", uploaded, posted, urn)
+	}
+	if capturedCommentary != `Hello LinkedIn \(Rust core\) #Go` {
+		t.Fatalf("expected escaped commentary, got %q", capturedCommentary)
 	}
 
 	// Dry run mode must not hit external API.

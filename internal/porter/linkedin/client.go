@@ -67,7 +67,7 @@ func (c *Client) PublishPost(ctx context.Context, postID, text, pngPath string) 
 
 	payload := map[string]any{
 		"author":     tok.PersonURN,
-		"commentary": text,
+		"commentary": escapeCommentary(text),
 		"visibility": "PUBLIC",
 		"distribution": map[string]any{
 			"feedDistribution":               "MAIN_FEED",
@@ -190,4 +190,25 @@ func (c *Client) setRestHeaders(req *http.Request, token, apiVersion string) {
 	req.Header.Set("Authorization", "Bearer "+token)
 	req.Header.Set("LinkedIn-Version", apiVersion)
 	req.Header.Set("X-Restli-Protocol-Version", "2.0.0")
+}
+
+// escapeCommentary escapes LinkedIn Little Text reserved characters so parentheses,
+// brackets, and symbols do not truncate the post on /rest/posts.
+func escapeCommentary(text string) string {
+	replacer := strings.NewReplacer(
+		`\`, `\\`,
+		`(`, `\(`,
+		`)`, `\)`,
+		`[`, `\[`,
+		`]`, `\]`,
+		`{`, `\{`,
+		`}`, `\}`,
+		`<`, `\<`,
+		`>`, `\>`,
+		`|`, `\|`,
+		`~`, `\~`,
+		`*`, `\*`,
+		`_`, `\_`,
+	)
+	return replacer.Replace(text)
 }
