@@ -15,7 +15,7 @@ func TestPostDraftValidationAndFormatting(t *testing.T) {
 		Hook:              "SQLite in WAL mode handles thousands of reads per second with zero network hops.",
 		Body:              strings.Repeat("Single-writer concurrency in Go pairs naturally with SQLite WAL mode when you pin MaxOpenConns(1). ", 2),
 		CallToAction:      "Are you using SQLite in production for local-first daemons?",
-		Hashtags:          []string{"GoLang", "#SQLite", "Software Engineering"},
+		Hashtags:          []string{"GoLang", "#SQLite", "Software Engineering", "#Dev", "#Backend", "#ExtraTag"},
 		Media: agents.PostMedia{
 			Type:     agents.MediaCodeSnippet,
 			Title:    "SQLite WAL setup in Go",

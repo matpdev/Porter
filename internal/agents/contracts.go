@@ -77,12 +77,28 @@ type QAReview struct {
 }
 
 func ValidatePostDraft(d *PostDraft) error {
-	for i, h := range d.Hashtags {
+	seen := make(map[string]struct{}, len(d.Hashtags))
+	normalized := make([]string, 0, len(d.Hashtags))
+	for _, h := range d.Hashtags {
 		cleaned := strings.TrimSpace(strings.TrimLeft(h, "#"))
 		cleaned = strings.ReplaceAll(cleaned, " ", "")
-		if cleaned != "" {
-			d.Hashtags[i] = "#" + cleaned
+		if cleaned == "" {
+			continue
 		}
+		tag := "#" + cleaned
+		key := strings.ToLower(tag)
+		if _, exists := seen[key]; exists {
+			continue
+		}
+		seen[key] = struct{}{}
+		normalized = append(normalized, tag)
+		if len(normalized) == 5 {
+			break
+		}
+	}
+	d.Hashtags = normalized
+	if len(d.Media.Title) > 60 {
+		d.Media.Title = strings.TrimSpace(d.Media.Title[:60])
 	}
 	if err := validate.Struct(d); err != nil {
 		return fmt.Errorf("invalid PostDraft: %w", err)
