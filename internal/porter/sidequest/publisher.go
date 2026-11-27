@@ -43,6 +43,10 @@ func (p *Publisher) PublishArticle(ctx context.Context, article *agents.Sideques
 		return "dryrun:" + enRelPath + " + " + ptRelPath, nil
 	}
 
+	if info, statErr := os.Stat(repoPath); statErr != nil || !info.IsDir() {
+		return "", fmt.Errorf("sidequest.repo_path %q does not exist on this machine; set it via /set sidequest.repo_path /path/to/sidequestlab.dev", repoPath)
+	}
+
 	if err := writeLocalizedMDX(repoPath, "en", slug, article.Title, article.Description, article.CoverAlt, article.MarkdownBody, article, coverPNGPath, draft); err != nil {
 		return "", err
 	}

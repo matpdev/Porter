@@ -113,6 +113,21 @@ func ValidatePostDraft(d *PostDraft) error {
 }
 
 func ValidateSidequestArticle(a *SidequestArticle) error {
+	trim := func(s string, max int) string {
+		s = strings.TrimSpace(s)
+		if len(s) > max {
+			return strings.TrimSpace(s[:max])
+		}
+		return s
+	}
+	a.Slug = trim(a.Slug, 80)
+	a.Title = trim(a.Title, 120)
+	a.TitlePT = trim(a.TitlePT, 120)
+	a.Description = trim(a.Description, 260)
+	a.DescriptionPT = trim(a.DescriptionPT, 260)
+	a.CoverAlt = trim(a.CoverAlt, 180)
+	a.CoverAltPT = trim(a.CoverAltPT, 180)
+
 	if err := validate.Struct(a); err != nil {
 		return fmt.Errorf("invalid SidequestArticle: %w", err)
 	}

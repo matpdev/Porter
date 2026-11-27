@@ -3,6 +3,7 @@ package telegram
 import (
 	"context"
 	"strings"
+	"time"
 
 	"codeberg.org/matheus/porter/internal/settings"
 	"github.com/go-telegram/bot"
@@ -87,17 +88,23 @@ func (s *BotService) handleCallback(ctx context.Context, b *bot.Bot, update *mod
 			return
 		}
 		action, postID := parts[0], parts[1]
-		if err := s.intake.HandlePostAction(ctx, action, postID); err != nil {
-			_, _ = b.AnswerCallbackQuery(ctx, &bot.AnswerCallbackQueryParams{
-				CallbackQueryID: update.CallbackQuery.ID,
-				Text:            err.Error(),
-				ShowAlert:       true,
-			})
-			return
-		}
 		_, _ = b.AnswerCallbackQuery(ctx, &bot.AnswerCallbackQueryParams{
 			CallbackQueryID: update.CallbackQuery.ID,
-			Text:            "Action received: " + action,
+			Text:            "Processing: " + action + "...",
 		})
+		var chatID int64
+		if update.CallbackQuery.Message.Message != nil {
+			chatID = update.CallbackQuery.Message.Message.Chat.ID
+		}
+		go func() {
+			runCtx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
+			defer cancel()
+			if err := s.intake.HandlePostAction(runCtx, action, postID); err != nil && chatID != 0 {
+				_, _ = b.SendMessage(context.Background(), &bot.SendMessageParams{
+					ChatID: chatID,
+					Text:   "❌ Action failed: " + err.Error(),
+				})
+			}
+		}()
 	}
 }
