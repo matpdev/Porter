@@ -412,11 +412,30 @@ func (s *BotService) reply(ctx context.Context, b *bot.Bot, update *models.Updat
 
 func parseKeyValueCommand(text, cmd string) (string, string, bool) {
 	rest := strings.TrimSpace(strings.TrimPrefix(text, cmd))
+	// Support both "/set key value", "/set key = value", and "/set key=value"
+	if eqIdx := strings.Index(rest, "="); eqIdx > 0 {
+		spIdx := strings.Index(rest, " ")
+		if spIdx == -1 || eqIdx < spIdx {
+			k := strings.TrimSpace(rest[:eqIdx])
+			v := strings.TrimSpace(rest[eqIdx+1:])
+			if k != "" && v != "" {
+				return k, v, true
+			}
+		}
+	}
 	parts := strings.SplitN(rest, " ", 2)
 	if len(parts) < 2 || strings.TrimSpace(parts[0]) == "" || strings.TrimSpace(parts[1]) == "" {
 		return "", "", false
 	}
-	return strings.TrimSpace(parts[0]), strings.TrimSpace(parts[1]), true
+	k := strings.TrimSpace(parts[0])
+	v := strings.TrimSpace(parts[1])
+	if strings.HasPrefix(v, "= ") || v == "=" {
+		v = strings.TrimSpace(strings.TrimPrefix(v, "="))
+	}
+	if v == "" {
+		return "", "", false
+	}
+	return k, v, true
 }
 
 func toggleLabel(name string, on bool) string {

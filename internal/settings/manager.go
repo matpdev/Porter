@@ -105,8 +105,12 @@ func (m *Manager) SeedDefaults(ctx context.Context) error {
 }
 
 func (m *Manager) Set(ctx context.Context, key, value string) error {
+	clean := strings.TrimSpace(value)
+	if strings.HasPrefix(clean, "= ") {
+		clean = strings.TrimSpace(strings.TrimPrefix(clean, "="))
+	}
 	isSecret := isSecretKey(key)
-	return m.repo.SetSetting(ctx, key, value, isSecret)
+	return m.repo.SetSetting(ctx, key, clean, isSecret)
 }
 
 func (m *Manager) GetString(ctx context.Context, key string) (string, error) {

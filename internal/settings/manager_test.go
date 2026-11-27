@@ -33,7 +33,7 @@ func TestManagerLiveUpdatesAndMasking(t *testing.T) {
 	}
 
 	// Simulate CLI changing a setting while daemon is running.
-	if err := cliMgr.Set(ctx, settings.KeyDryRun, "true"); err != nil {
+	if err := cliMgr.Set(ctx, settings.KeyDryRun, "= true"); err != nil {
 		t.Fatalf("cli set dry_run: %v", err)
 	}
 	if err := cliMgr.Set(ctx, settings.KeyDeepSeekAPIKey, "sk-1234567890abcdef"); err != nil {
